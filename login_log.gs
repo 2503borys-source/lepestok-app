@@ -13,7 +13,7 @@
  * Deploy → New deployment → Web app → Execute as: Me, Who has access: Anyone → скопировать URL в API_URL в index.html
  * Логины и пароли живут только здесь — в публичном коде приложения их нет.
  */
-const COLS = ['Время', 'Успех', 'Логин', 'Комментарий', 'TG id', 'TG username', 'Имя', 'Широта', 'Долгота', 'Точность, м', 'Карта', 'Платформа', 'Устройство'];
+const COLS = ['Время', 'Успех', 'TG ник', 'Имя', 'TG id', 'Комментарий'];
 
 function doPost(e) {
   const d = JSON.parse(e.postData.contents);
@@ -29,7 +29,6 @@ function doPost(e) {
       return json({error: LOCK_MSG, locked: true});
     }
     const ok = !!p.getProperty('APP_LOGIN') && d.login === p.getProperty('APP_LOGIN') && d.pass === p.getProperty('APP_PASS');
-    const geo = !!d.lat;
     if (!ok) {
       const left = fail(p, who);
       log(sheet, p, d, false, d.login, 'неверный пароль' + (left > 0 ? ', осталось попыток: ' + left : ' — ЗАБЛОКИРОВАН'));
@@ -37,8 +36,7 @@ function doPost(e) {
                       : json({error: LOCK_MSG, locked: true});
     }
     p.deleteProperty('fails_' + who);
-    log(sheet, p, d, geo, d.login, geo ? '' : 'нет геолокации');
-    if (!geo) return json({error: 'Разреши доступ к местоположению — без него вход невозможен'});
+    log(sheet, p, d, true, d.login, '');
     return json({ok: true, token: sign(p, d.tgId)});
   }
 
@@ -46,7 +44,7 @@ function doPost(e) {
   if (d.action === 'check') {
     if (isLocked(p, who)) return json({error: 'expired'});
     const ok = !!d.token && d.token === sign(p, d.tgId);
-    log(sheet, p, d, ok, 'запомнен', ok ? 'автовход' + (d.lat ? '' : ', без геолокации') : 'недействительный токен');
+    log(sheet, p, d, ok, 'запомнен', ok ? 'автовход' : 'недействительный токен');
     return json(ok ? {ok: true} : {error: 'expired'});
   }
 
@@ -55,7 +53,7 @@ function doPost(e) {
     const admin = p.getProperty('ADMIN_PASS');
     if (!admin || d.pass !== admin) return json({error: 'Неверный пароль'});
     if (d.action === 'unlock') unlock(p, d.target);
-    const rows = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 12).getDisplayValues() : [];
+    const rows = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, COLS.length).getDisplayValues() : [];
     return json({rows: rows.reverse().slice(0, 300), locks: locks(p)});
   }
 
@@ -108,16 +106,15 @@ function sign(p, tgId) {
 
 function log(sheet, p, d, success, login, note) {
   if (sheet.getLastRow() === 0) sheet.appendRow(COLS);
-  const map = d.lat ? 'https://maps.google.com/?q=' + d.lat + ',' + d.lon : '';
   const time = Utilities.formatDate(new Date(), 'Europe/Warsaw', 'yyyy-MM-dd HH:mm:ss');
-  sheet.appendRow([time, success ? 'да' : 'нет', login, note, d.tgId, d.tgUser, d.tgName, d.lat, d.lon, d.acc, map, d.platform, d.ua]);
+  if (!success && login !== 'запомнен') note += ' (логин: ' + login + ')';
+  sheet.appendRow([time, success ? 'да' : 'нет', d.tgUser || '', d.tgName || '', d.tgId || '', note]);
 
   const token = p.getProperty('BOT_TOKEN'), chat = p.getProperty('CHAT_ID');
   if (token && chat) {
-    const text = (success ? '✅ Вход' : '⚠️ Попытка входа') + '\n' + time +
-      '\n👤 ' + (d.tgName || '?') + (d.tgUser ? ' @' + d.tgUser : '') + ' (id ' + (d.tgId || '?') + ')' +
-      '\nЛогин: ' + login + (note ? '\n' + note : '') +
-      (map ? '\n📍 ' + map + ' (±' + d.acc + ' м)' : '\n📍 без геолокации');
+    const text = (success ? '✅ Вход' : '⚠️ Попытка входа') + ' — ' + time +
+      '\n👤 ' + (d.tgUser ? '@' + d.tgUser : 'без ника') + (d.tgName ? ' (' + d.tgName + ')' : '') +
+      (note ? '\n' + note : '');
     UrlFetchApp.fetch('https://api.telegram.org/bot' + token + '/sendMessage', {
       method: 'post', contentType: 'application/json', muteHttpExceptions: true,
       payload: JSON.stringify({chat_id: chat, text: text, disable_web_page_preview: true})
