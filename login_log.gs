@@ -20,32 +20,84 @@ function doPost(e) {
   const p = PropertiesService.getScriptProperties();
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
 
+  const who = String(d.tgId || 'web');
+
   // вход по логину и паролю
   if (d.action === 'login') {
+    if (isLocked(p, who)) {
+      log(sheet, p, d, false, d.login, 'заблокирован');
+      return json({error: LOCK_MSG, locked: true});
+    }
     const ok = !!p.getProperty('APP_LOGIN') && d.login === p.getProperty('APP_LOGIN') && d.pass === p.getProperty('APP_PASS');
     const geo = !!d.lat;
-    log(sheet, p, d, ok && geo, d.login, !ok ? 'неверный пароль' : !geo ? 'нет геолокации' : '');
-    if (!ok) return json({error: 'Неверный логин или пароль'});
+    if (!ok) {
+      const left = fail(p, who);
+      log(sheet, p, d, false, d.login, 'неверный пароль' + (left > 0 ? ', осталось попыток: ' + left : ' — ЗАБЛОКИРОВАН'));
+      return left > 0 ? json({error: 'Неверный логин или пароль. Осталось попыток: ' + left})
+                      : json({error: LOCK_MSG, locked: true});
+    }
+    p.deleteProperty('fails_' + who);
+    log(sheet, p, d, geo, d.login, geo ? '' : 'нет геолокации');
     if (!geo) return json({error: 'Разреши доступ к местоположению — без него вход невозможен'});
     return json({ok: true, token: sign(p, d.tgId)});
   }
 
   // «Запомнить меня»: проверка сохранённого токена
   if (d.action === 'check') {
+    if (isLocked(p, who)) return json({error: 'expired'});
     const ok = !!d.token && d.token === sign(p, d.tgId);
     log(sheet, p, d, ok, 'запомнен', ok ? 'автовход' + (d.lat ? '' : ', без геолокации') : 'недействительный токен');
     return json(ok ? {ok: true} : {error: 'expired'});
   }
 
-  // админ: чтение журнала
-  if (d.action === 'list') {
+  // админ: журнал, список блокировок, снятие блокировок
+  if (d.action === 'list' || d.action === 'unlock') {
     const admin = p.getProperty('ADMIN_PASS');
     if (!admin || d.pass !== admin) return json({error: 'Неверный пароль'});
+    if (d.action === 'unlock') unlock(p, d.target);
     const rows = sheet.getLastRow() > 1 ? sheet.getRange(2, 1, sheet.getLastRow() - 1, 12).getDisplayValues() : [];
-    return json({rows: rows.reverse().slice(0, 300)});
+    return json({rows: rows.reverse().slice(0, 300), locks: locks(p)});
   }
 
   return json({error: 'unknown action'});
+}
+
+// ---------- защита от подбора ----------
+// 3 неверных пароля с одного Telegram-аккаунта → он заблокирован.
+// 10 неверных паролей всего (с любых аккаунтов) → заблокирован вход для всех.
+// Снять блокировку можно только в журнале входов по ADMIN_PASS.
+const MAX_FAILS = 3, MAX_TOTAL = 10;
+const LOCK_MSG = 'Слишком много неверных попыток. Вход заблокирован — обратись к администратору.';
+
+function isLocked(p, who) {
+  return !!p.getProperty('locked_' + who) || !!p.getProperty('locked_ALL');
+}
+function fail(p, who) {
+  const lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    const n = Number(p.getProperty('fails_' + who) || 0) + 1;
+    const total = Number(p.getProperty('fails_total') || 0) + 1;
+    p.setProperty('fails_' + who, String(n));
+    p.setProperty('fails_total', String(total));
+    const now = Utilities.formatDate(new Date(), 'Europe/Warsaw', 'yyyy-MM-dd HH:mm');
+    if (n >= MAX_FAILS) p.setProperty('locked_' + who, now);
+    if (total >= MAX_TOTAL) p.setProperty('locked_ALL', now);
+    return MAX_FAILS - n;
+  } finally { lock.releaseLock(); }
+}
+function locks(p) {
+  const all = p.getProperties();
+  return Object.keys(all).filter(k => k.indexOf('locked_') === 0)
+    .map(k => ({id: k.slice(7), since: all[k]}));
+}
+function unlock(p, target) {
+  const all = p.getProperties();
+  Object.keys(all).forEach(k => {
+    const id = k.replace(/^(locked_|fails_)/, '');
+    if ((k.indexOf('locked_') === 0 || k.indexOf('fails_') === 0) && (target === '*' || id === target || (target === 'ALL' && k === 'fails_total')))
+      p.deleteProperty(k);
+  });
+  if (target === 'ALL' || target === '*') p.deleteProperty('fails_total');
 }
 
 // токен = HMAC(SECRET + логин + пароль, tgId): смена пароля или SECRET сбрасывает все «запомненные» входы

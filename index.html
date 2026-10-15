@@ -106,6 +106,7 @@
       <div class="err" id="adminErr"></div>
       <button id="adminBtn">Показать</button>
     </div>
+    <div id="lockList"></div>
     <div id="logList"></div>
     <button class="ghost" onclick="closeAdmin()">← Назад</button>
   </div>
@@ -258,7 +259,7 @@ function openAdmin() {
 }
 function closeAdmin() {
   $('admin').classList.add('hidden'); $(adminFrom).classList.remove('hidden');
-  $('adminPass').value = ''; $('logList').innerHTML = ''; $('adminLogin').classList.remove('hidden');
+  $('adminPass').value = ''; $('logList').innerHTML = ''; $('lockList').innerHTML = ''; $('adminLogin').classList.remove('hidden');
 }
 $('adminBtn').onclick = async () => {
   $('adminErr').textContent = '';
@@ -267,8 +268,21 @@ $('adminBtn').onclick = async () => {
   $('adminBtn').disabled = false; $('adminBtn').textContent = 'Показать';
   if (res.error) return $('adminErr').textContent = res.error;
   $('adminLogin').classList.add('hidden');
-  renderLog(res.rows || []);
+  renderLocks(res.locks || []); renderLog(res.rows || []);
 };
+async function unlockUser(target) {
+  const res = await api({action: 'unlock', pass: $('adminPass').value, target});
+  if (res.error) return alert(res.error);
+  renderLocks(res.locks || []); renderLog(res.rows || []);
+}
+function renderLocks(locks) {
+  if (!locks.length) return $('lockList').innerHTML = '<div class="card meta">🔓 Блокировок нет</div>';
+  $('lockList').innerHTML = '<h2>Заблокированы</h2>' + locks.map(l => `<div class="card item">
+    <div><div class="name">⛔ ${l.id === 'ALL' ? 'Вход для всех (10+ ошибок)' : l.id === 'web' ? 'Браузер (без Telegram)' : 'TG id ' + esc(l.id)}</div>
+      <div class="meta">с ${esc(l.since)}</div></div>
+    <button class="small" onclick="unlockUser('${esc(l.id)}')">Снять</button>
+  </div>`).join('') + (locks.length > 1 ? '<button class="small" onclick="unlockUser(\'*\')">Снять все</button>' : '');
+}
 function renderLog(rows) {
   const e = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   if (!rows.length) return $('logList').innerHTML = '<div class="card empty">Входов пока не было</div>';
