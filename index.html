@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Закупка цветов</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root{
+    --bg: var(--tg-theme-bg-color, #fff);
+    --bg2: var(--tg-theme-secondary-bg-color, #f2f2f6);
+    --text: var(--tg-theme-text-color, #111);
+    --hint: var(--tg-theme-hint-color, #888);
+    --accent: var(--tg-theme-button-color, #d0457a);
+    --accent-text: var(--tg-theme-button-text-color, #fff);
+    --danger: #e0453a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg2);color:var(--text);font-size:16px}
+  .wrap{max-width:520px;margin:0 auto;padding:16px}
+  h1{font-size:20px;margin:4px 0 16px}
+  h2{font-size:15px;color:var(--hint);text-transform:uppercase;letter-spacing:.04em;margin:20px 4px 8px;font-weight:600}
+  .card{background:var(--bg);border-radius:14px;padding:14px;margin-bottom:10px}
+  label{display:block;font-size:13px;color:var(--hint);margin:8px 0 4px}
+  input{width:100%;padding:11px 12px;border:1px solid rgba(128,128,128,.3);border-radius:10px;background:var(--bg2);color:var(--text);font-size:16px}
+  .row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  button{width:100%;padding:13px;border:0;border-radius:10px;background:var(--accent);color:var(--accent-text);font-size:16px;font-weight:600;margin-top:12px;cursor:pointer}
+  button.ghost{background:transparent;color:var(--hint);font-weight:400;margin-top:4px}
+  .calc{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+  .calc div{background:var(--bg2);border-radius:10px;padding:8px;text-align:center}
+  .calc b{display:block;font-size:17px}
+  .calc span{font-size:12px;color:var(--hint)}
+  .item{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .item .name{font-weight:600}
+  .item .meta{font-size:13px;color:var(--hint);margin-top:2px}
+  .item .right{text-align:right;white-space:nowrap}
+  .item .per{font-size:18px;font-weight:700;color:var(--accent)}
+  .del{background:none;border:0;color:var(--danger);font-size:13px;padding:4px 0;margin:4px 0 0;width:auto}
+  .sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .sum div{text-align:center}.sum b{display:block;font-size:18px}.sum span{font-size:12px;color:var(--hint)}
+  .err{color:var(--danger);font-size:14px;min-height:18px;margin-top:8px}
+  .empty{color:var(--hint);text-align:center;padding:20px}
+  .hidden{display:none}
+  #splash{position:fixed;inset:0;z-index:9;background:#fbeee6;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .4s}
+  #splash.gone{opacity:0;pointer-events:none}
+  .petal{width:46px;animation:sway 1.6s ease-in-out infinite;transform-origin:50% 100%}
+  @keyframes sway{0%,100%{transform:rotate(-14deg)}50%{transform:rotate(14deg)}}
+  .splash-name{font-family:Georgia,serif;font-style:italic;font-size:34px;color:#b8475f;margin-top:10px}
+  .bar{width:140px;height:3px;background:rgba(184,71,95,.2);border-radius:3px;margin-top:18px;overflow:hidden}
+  .bar i{display:block;height:100%;width:40%;background:#b8475f;border-radius:3px;animation:load 1s ease-in-out infinite}
+  @keyframes load{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
+  .logo-wrap{text-align:center;margin:40px 0 24px}
+  .logo{width:220px;max-width:70%;display:block;margin:0 auto}
+  .brand{color:var(--hint);margin-top:10px;font-size:14px;letter-spacing:.05em}
+  .check{display:flex;align-items:center;gap:8px;color:var(--text);font-size:15px;margin-top:14px;cursor:pointer}
+  .check input{width:20px;height:20px;margin:0;accent-color:var(--accent)}
+  .geo-note{font-size:13px;color:var(--hint);margin:12px 0 0}
+  select{width:100%;padding:11px 12px;border:1px solid rgba(128,128,128,.3);border-radius:10px;background:var(--bg2);color:var(--text);font-size:16px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .tabs{display:flex;background:var(--bg);border-radius:12px;padding:4px;margin-bottom:12px}
+  .tabs a{flex:1;text-align:center;padding:9px;border-radius:9px;color:var(--hint);cursor:pointer;font-weight:600}
+  .tabs a.on{background:var(--accent);color:var(--accent-text)}
+  .tag{display:inline-block;font-size:12px;background:var(--bg2);border-radius:6px;padding:2px 6px;margin-top:4px}
+  .lead{cursor:pointer}
+  .lead .sub{border-top:1px solid rgba(128,128,128,.2);margin-top:10px;padding-top:8px;font-size:14px}
+  .lead .sub div{display:flex;justify-content:space-between;padding:2px 0}
+  .pos{color:#2a9d4b}.neg{color:var(--danger)}
+  button.small{width:auto;padding:8px 12px;font-size:14px;margin:8px 8px 0 0}
+  .day{font-size:13px;color:var(--hint);margin:14px 4px 6px}
+</style>
+</head>
+<body>
+<div id="splash">
+  <svg class="petal" viewBox="0 0 40 60"><ellipse cx="20" cy="30" rx="14" ry="24" fill="#b8475f"/></svg>
+  <div class="splash-name">lepestok</div>
+  <div class="bar"><i></i></div>
+</div>
+<div class="wrap">
+
+  <!-- ВХОД -->
+  <div id="auth" class="hidden">
+    <div class="logo-wrap">
+      <svg class="logo" viewBox="0 0 300 120" role="img" aria-label="lepestok">
+        <rect x="0" y="0" width="300" height="120" rx="14" fill="#b8475f"/>
+        <text x="150" y="86" text-anchor="middle" font-family="Georgia,'Times New Roman',serif" font-style="italic" font-size="62" fill="#fbeee6">lepestok</text>
+        <ellipse cx="252" cy="30" rx="10" ry="15" transform="rotate(35 252 30)" fill="#fbeee6"/>
+      </svg>
+      <div class="brand">Lepestok.warsaw</div>
+    </div>
+    <div class="card">
+      <label>Логин</label><input id="login" autocomplete="username" autocapitalize="off">
+      <label>Пароль</label><input id="pass" type="password" autocomplete="current-password">
+      <label class="check"><input type="checkbox" id="remember" checked> Запомнить меня</label>
+      <p class="geo-note">📍 Для входа нужен доступ к местоположению</p>
+      <div class="err" id="authErr"></div>
+      <button id="authBtn">Войти</button>
+    </div>
+    <button class="ghost" onclick="openAdmin()">🔒 Журнал входов</button>
+  </div>
+
+  <!-- АДМИН: журнал входов -->
+  <div id="admin" class="hidden">
+    <h1>🔒 Журнал входов</h1>
+    <div class="card" id="adminLogin">
+      <label>Пароль администратора</label><input id="adminPass" type="password">
+      <div class="err" id="adminErr"></div>
+      <button id="adminBtn">Показать</button>
+    </div>
+    <div id="logList"></div>
+    <button class="ghost" onclick="closeAdmin()">← Назад</button>
+  </div>
+
+  <!-- ПРИЛОЖЕНИЕ -->
+  <div id="app" class="hidden">
+    <h1>🌸 Закупка цветов</h1>
+    <div class="tabs"><a id="tabP" class="on">Закупки</a><a id="tabL">Лиды</a></div>
+
+    <!-- ЛИДЫ -->
+    <div id="leadsView" class="hidden">
+      <div class="card">
+        <label>Имя клиента</label><input id="lName" placeholder="Анна">
+        <div class="row2">
+          <div><label>Телефон / Instagram</label><input id="lContact" placeholder="+48 …"></div>
+          <div><label>Цена продажи, zł</label><input id="lSale" type="number" inputmode="decimal" placeholder="250"></div>
+        </div>
+        <label>Заметка (что за букет, дата)</label><input id="lNote" placeholder="Букет 25 роз, 20.10">
+        <div class="err" id="leadErr"></div>
+        <button id="leadBtn">Добавить лида</button>
+      </div>
+      <div id="leadList"></div>
+    </div>
+
+    <!-- ЗАКУПКИ -->
+    <div id="purchView">
+    <div class="card">
+      <label>Для лида</label>
+      <select id="fLead"></select>
+      <label>Цветок</label><input id="fName" placeholder="Роза Эквадор 60см" list="names">
+      <datalist id="names"></datalist>
+      <div class="row">
+        <div><label>Пачек</label><input id="fPacks" type="number" inputmode="decimal" value="1" min="0"></div>
+        <div><label>Шт в пачке</label><input id="fPer" type="number" inputmode="numeric" placeholder="25"></div>
+        <div><label>Цена пачки, zł</label><input id="fPrice" type="number" inputmode="decimal" placeholder="50"></div>
+      </div>
+      <div class="calc">
+        <div><b id="cStem">—</b><span>за 1 шт</span></div>
+        <div><b id="cQty">—</b><span>всего шт</span></div>
+        <div><b id="cTotal">—</b><span>сумма</span></div>
+      </div>
+      <div class="err" id="addErr"></div>
+      <button id="addBtn">Добавить закупку</button>
+    </div>
+
+    <h2>Итого</h2>
+    <div class="card sum">
+      <div><b id="sTotal">0 zł</b><span>потрачено</span></div>
+      <div><b id="sQty">0</b><span>штук</span></div>
+      <div><b id="sAvg">—</b><span>средн. за шт</span></div>
+    </div>
+
+    <h2>История</h2>
+    <div id="list"></div>
+    </div>
+
+    <button class="ghost" onclick="openAdmin()">🔒 Журнал входов</button>
+    <button class="ghost" id="logoutBtn">Выйти</button>
+  </div>
+</div>
+
+<script>
+const tg = window.Telegram && Telegram.WebApp;
+const inTG = !!(tg && tg.initData);
+if (tg) { tg.ready(); tg.expand(); }
+
+// ---------- хранилище: Telegram CloudStorage (синхронно на всех устройствах) или localStorage ----------
+const store = {
+  get(keys) {
+    if (inTG) return new Promise(r => tg.CloudStorage.getItems(keys, (e, v) => r(e ? {} : v)));
+    const o = {}; keys.forEach(k => o[k] = localStorage.getItem(k) || ''); return Promise.resolve(o);
+  },
+  set(k, v) {
+    if (inTG) return new Promise((r, j) => tg.CloudStorage.setItem(k, v, e => e ? j(e) : r()));
+    localStorage.setItem(k, v); return Promise.resolve();
+  },
+  del(k) {
+    if (inTG) return new Promise(r => tg.CloudStorage.removeItem(k, () => r()));
+    localStorage.removeItem(k); return Promise.resolve();
+  },
+  keys() {
+    if (inTG) return new Promise(r => tg.CloudStorage.getKeys((e, k) => r(e ? [] : k)));
+    return Promise.resolve(Object.keys(localStorage));
+  }
+};
+
+const $ = id => document.getElementById(id);
+const num = v => parseFloat(String(v).replace(',', '.')) || 0;
+const zl = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' zł';
+
+// ---------- вход ----------
+// URL веб-приложения Google Apps Script (см. login_log.gs). Логин и пароли проверяются там —
+// в этом (публичном) коде их нет.
+const API_URL = '';
+
+async function api(data) {
+  if (!API_URL) return {error: 'Сервер не подключён (API_URL пустой)'};
+  const u = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) || {};
+  const body = JSON.stringify(Object.assign({
+    tgId: u.id || '', tgUser: u.username || '', tgName: [u.first_name, u.last_name].filter(Boolean).join(' '),
+    platform: tg ? tg.platform : 'web', ua: navigator.userAgent
+  }, data));
+  try {
+    const r = await fetch(API_URL, {method: 'POST', headers: {'Content-Type': 'text/plain'}, body});
+    return await r.json();
+  } catch (e) { return {error: 'Нет связи с сервером'}; }
+}
+const geo = loc => loc ? {lat: loc.lat, lon: loc.lon, acc: loc.acc} : {lat: '', lon: '', acc: ''};
+
+// «Запомнить меня»: сервер выдаёт подписанный токен, он хранится в облаке Telegram
+async function initAuth() {
+  const [saved] = await Promise.all([store.get(['remember']), new Promise(r => setTimeout(r, 1300))]);
+  if (sessionStorage.getItem('ok') === '1') { $('splash').classList.add('gone'); return showApp(); }
+  if (saved.remember) {
+    const loc = await getLocation().catch(() => null);
+    const res = await api(Object.assign({action: 'check', token: saved.remember}, geo(loc)));
+    if (res.ok) { sessionStorage.setItem('ok', '1'); $('splash').classList.add('gone'); return showApp(); }
+    if (res.error === 'expired') await store.del('remember');
+  }
+  $('splash').classList.add('gone');
+  $('auth').classList.remove('hidden');
+}
+
+// местоположение: Telegram LocationManager (новые клиенты) или браузерное geolocation
+function getLocation() {
+  return new Promise((resolve, reject) => {
+    const lm = tg && tg.LocationManager;
+    if (inTG && lm && tg.isVersionAtLeast && tg.isVersionAtLeast('8.0')) {
+      lm.init(() => {
+        if (!lm.isLocationAvailable) return browserGeo(resolve, reject);
+        lm.getLocation(loc => loc ? resolve({lat: loc.latitude, lon: loc.longitude, acc: loc.horizontal_accuracy})
+                                  : reject(new Error('denied')));
+      });
+    } else browserGeo(resolve, reject);
+  });
+}
+function browserGeo(resolve, reject) {
+  if (!navigator.geolocation) return reject(new Error('unsupported'));
+  navigator.geolocation.getCurrentPosition(
+    p => resolve({lat: p.coords.latitude, lon: p.coords.longitude, acc: Math.round(p.coords.accuracy)}),
+    reject, {enableHighAccuracy: true, timeout: 15000});
+}
+
+// ---------- админ: журнал входов (пароль проверяет Apps Script) ----------
+let adminFrom = null;
+function openAdmin() {
+  adminFrom = $('app').classList.contains('hidden') ? 'auth' : 'app';
+  $(adminFrom).classList.add('hidden'); $('admin').classList.remove('hidden');
+  $('adminErr').textContent = ''; window.scrollTo(0, 0);
+}
+function closeAdmin() {
+  $('admin').classList.add('hidden'); $(adminFrom).classList.remove('hidden');
+  $('adminPass').value = ''; $('logList').innerHTML = ''; $('adminLogin').classList.remove('hidden');
+}
+$('adminBtn').onclick = async () => {
+  $('adminErr').textContent = '';
+  $('adminBtn').disabled = true; $('adminBtn').textContent = 'Загружаю…';
+  const res = await api({action: 'list', pass: $('adminPass').value});
+  $('adminBtn').disabled = false; $('adminBtn').textContent = 'Показать';
+  if (res.error) return $('adminErr').textContent = res.error;
+  $('adminLogin').classList.add('hidden');
+  renderLog(res.rows || []);
+};
+function renderLog(rows) {
+  const e = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  if (!rows.length) return $('logList').innerHTML = '<div class="card empty">Входов пока не было</div>';
+  // колонки: Время, Успех, Логин, Комментарий, TG id, username, Имя, Широта, Долгота, Точность, Карта, Платформа
+  $('logList').innerHTML = rows.map(r => `<div class="card item">
+    <div><div class="name">${r[1] === 'да' ? '✅' : '⚠️'} ${e(r[6] || 'Без имени')} ${r[5] ? '<span class="meta">@' + e(r[5]) + '</span>' : ''}</div>
+      <div class="meta">${e(r[0])} · ${e(r[11])}</div>
+      <div class="meta">логин: ${e(r[2])}${r[3] ? ' · ' + e(r[3]) : ''} · id ${e(r[4])}</div></div>
+    <div class="right">${r[10] ? `<a href="${e(r[10])}" target="_blank" class="per" style="text-decoration:none">📍</a><div class="meta">±${e(r[9])} м</div>`
+                                : '<div class="meta">нет гео</div>'}</div>
+  </div>`).join('');
+  $('logList').querySelectorAll('a').forEach(a => a.onclick = ev => {
+    if (inTG) { ev.preventDefault(); tg.openLink(a.href); }
+  });
+}
+
+$('authBtn').onclick = async () => {
+  const l = $('login').value.trim(), p = $('pass').value;
+  $('authErr').textContent = '';
+  if (!l || !p) return $('authErr').textContent = 'Введи логин и пароль';
+  $('authBtn').disabled = true; $('authBtn').textContent = 'Определяю местоположение…';
+  const loc = await getLocation().catch(() => null);
+  $('authBtn').textContent = 'Проверяю…';
+  // сервер проверяет пароль и пишет попытку в журнал (в т.ч. без геолокации)
+  const res = await api(Object.assign({action: 'login', login: l, pass: p}, geo(loc)));
+  $('authBtn').disabled = false; $('authBtn').textContent = 'Войти';
+
+  if (!res.ok) {
+    if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+    return $('authErr').textContent = res.error || 'Ошибка входа';
+  }
+  sessionStorage.setItem('ok', '1');
+  if ($('remember').checked) await store.set('remember', res.token);
+  showApp();
+};
+$('logoutBtn').onclick = async () => { sessionStorage.removeItem('ok'); await store.del('remember'); location.reload(); };
+
+// ---------- данные: закупки (p_) и лиды (l_) ----------
+let items = [], leads = [];
+const esc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cost = i => i.packs * i.price;
+const askDel = q => new Promise(r => inTG ? tg.showConfirm(q, r) : r(confirm(q)));
+const ok = () => tg && tg.HapticFeedback && tg.HapticFeedback.notificationOccurred('success');
+
+async function load() {
+  const keys = (await store.keys()).filter(k => k.startsWith('p_') || k.startsWith('l_'));
+  const vals = keys.length ? await store.get(keys) : {};
+  const parse = k => { try { return JSON.parse(vals[k]); } catch { return null; } };
+  items = keys.filter(k => k[0] === 'p').map(parse).filter(Boolean).sort((a, b) => b.t - a.t);
+  leads = keys.filter(k => k[0] === 'l').map(parse).filter(Boolean).sort((a, b) => b.t - a.t);
+  render();
+}
+
+// ---------- вкладки ----------
+function tab(name) {
+  $('tabP').classList.toggle('on', name === 'p'); $('tabL').classList.toggle('on', name === 'l');
+  $('purchView').classList.toggle('hidden', name !== 'p'); $('leadsView').classList.toggle('hidden', name !== 'l');
+}
+$('tabP').onclick = () => tab('p'); $('tabL').onclick = () => tab('l');
+
+// ---------- закупки ----------
+function calc() {
+  const packs = num($('fPacks').value), per = num($('fPer').value), price = num($('fPrice').value);
+  const qty = packs * per, total = packs * price, stem = per ? price / per : 0;
+  $('cStem').textContent = per && price ? zl(stem) : '—';
+  $('cQty').textContent = qty ? qty : '—';
+  $('cTotal').textContent = total ? zl(total) : '—';
+  return {packs, per, price, qty, total, stem};
+}
+['fPacks', 'fPer', 'fPrice'].forEach(id => $(id).oninput = calc);
+
+$('addBtn').onclick = async () => {
+  const name = $('fName').value.trim(), c = calc();
+  $('addErr').textContent = '';
+  if (!name || !c.packs || !c.per || !c.price) return $('addErr').textContent = 'Заполни все поля';
+  const it = {id: Date.now().toString(36), t: Date.now(), name, packs: c.packs, per: c.per, price: c.price, lead: $('fLead').value};
+  try { await store.set('p_' + it.id, JSON.stringify(it)); }
+  catch (e) { return $('addErr').textContent = 'Ошибка сохранения: ' + e; }
+  items.unshift(it);
+  $('fName').value = ''; $('fPer').value = ''; $('fPrice').value = ''; $('fPacks').value = '1';
+  calc(); render(); ok();
+};
+
+async function delItem(id) {
+  if (!await askDel('Удалить закупку?')) return;
+  await store.del('p_' + id);
+  items = items.filter(i => i.id !== id); render();
+}
+
+// ---------- лиды ----------
+$('leadBtn').onclick = async () => {
+  const name = $('lName').value.trim();
+  $('leadErr').textContent = '';
+  if (!name) return $('leadErr').textContent = 'Укажи имя';
+  const l = {id: Date.now().toString(36), t: Date.now(), name, contact: $('lContact').value.trim(), note: $('lNote').value.trim(), sale: num($('lSale').value)};
+  try { await store.set('l_' + l.id, JSON.stringify(l)); }
+  catch (e) { return $('leadErr').textContent = 'Ошибка сохранения: ' + e; }
+  leads.unshift(l);
+  ['lName', 'lContact', 'lNote', 'lSale'].forEach(id => $(id).value = '');
+  render(); ok();
+};
+
+async function delLead(id) {
+  if (!await askDel('Удалить лида? Закупки останутся, но без привязки.')) return;
+  await store.del('l_' + id);
+  leads = leads.filter(l => l.id !== id);
+  for (const i of items.filter(i => i.lead === id)) { i.lead = ''; await store.set('p_' + i.id, JSON.stringify(i)); }
+  render();
+}
+
+function buyFor(id) {
+  tab('p'); $('fLead').value = id; $('fName').focus(); window.scrollTo(0, 0);
+}
+
+let openLead = null;
+function toggleLead(id) { openLead = openLead === id ? null : id; render(); }
+
+// ---------- отрисовка ----------
+function render() {
+  const leadName = id => (leads.find(l => l.id === id) || {}).name;
+
+  // выбор лида в форме закупки
+  const cur = $('fLead').value;
+  $('fLead').innerHTML = '<option value="">— без лида (на склад) —</option>' +
+    leads.map(l => `<option value="${l.id}">${esc(l.name)}${l.note ? ' · ' + esc(l.note) : ''}</option>`).join('');
+  $('fLead').value = leads.some(l => l.id === cur) ? cur : '';
+
+  // итого
+  let total = 0, qty = 0;
+  items.forEach(i => { total += cost(i); qty += i.packs * i.per; });
+  $('sTotal').textContent = zl(total); $('sQty').textContent = qty; $('sAvg').textContent = qty ? zl(total / qty) : '—';
+  $('names').innerHTML = [...new Set(items.map(i => i.name))].map(n => `<option value="${esc(n)}">`).join('');
+
+  // история закупок
+  if (!items.length) $('list').innerHTML = '<div class="card empty">Пока пусто</div>';
+  else {
+    let html = '', day = '';
+    for (const i of items) {
+      const d = new Date(i.t).toLocaleDateString('ru-RU', {day: 'numeric', month: 'long', year: 'numeric'});
+      if (d !== day) { day = d; html += `<div class="day">${d}</div>`; }
+      const ln = leadName(i.lead);
+      html += `<div class="card item">
+        <div><div class="name">${esc(i.name)}</div>
+          <div class="meta">${i.packs} пач. × ${i.per} шт × ${zl(i.price)}</div>
+          <div class="meta">${i.packs * i.per} шт · ${zl(cost(i))}</div>
+          ${ln ? `<span class="tag">👤 ${esc(ln)}</span><br>` : ''}
+          <button class="del" onclick="delItem('${i.id}')">Удалить</button></div>
+        <div class="right"><div class="per">${zl(i.price / i.per)}</div><div class="meta">за 1 шт</div></div>
+      </div>`;
+    }
+    $('list').innerHTML = html;
+  }
+
+  // лиды
+  if (!leads.length) return $('leadList').innerHTML = '<div class="card empty">Лидов пока нет</div>';
+  $('leadList').innerHTML = leads.map(l => {
+    const its = items.filter(i => i.lead === l.id);
+    const spent = its.reduce((s, i) => s + cost(i), 0);
+    const profit = l.sale - spent;
+    const open = openLead === l.id;
+    return `<div class="card lead" onclick="toggleLead('${l.id}')">
+      <div class="item">
+        <div><div class="name">${esc(l.name)}</div>
+          ${l.contact ? `<div class="meta">${esc(l.contact)}</div>` : ''}
+          ${l.note ? `<div class="meta">${esc(l.note)}</div>` : ''}
+          <div class="meta">${open ? '▲ скрыть' : '▼ закупки (' + its.length + ')'}</div></div>
+        <div class="right">
+          <div class="meta">закупка ${zl(spent)}</div>
+          ${l.sale ? `<div class="meta">продажа ${zl(l.sale)}</div><div class="per ${profit >= 0 ? 'pos' : 'neg'}">${profit >= 0 ? '+' : ''}${zl(profit)}</div>` : ''}
+        </div>
+      </div>
+      ${open ? `<div class="sub" onclick="event.stopPropagation()">
+        ${its.length ? its.map(i => `<div><span>${esc(i.name)} — ${i.packs * i.per} шт</span><span>${zl(cost(i))}</span></div>`).join('') : '<div class="meta">Закупок пока нет</div>'}
+        <button class="small" onclick="buyFor('${l.id}')">+ Закупка для лида</button>
+        <button class="del" onclick="delLead('${l.id}')">Удалить лида</button>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function showApp() { $('auth').classList.add('hidden'); $('app').classList.remove('hidden'); load(); }
+initAuth();
+</script>
+</body>
+</html>
