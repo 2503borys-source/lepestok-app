@@ -52,6 +52,7 @@
   .logo-wrap{text-align:center;margin:40px 0 24px}
   .logo{width:220px;max-width:70%;display:block;margin:0 auto}
   .brand{color:var(--hint);margin-top:10px;font-size:14px;letter-spacing:.05em}
+  .hint{font-size:14px;color:var(--hint);margin:0 0 4px}
   .check{display:flex;align-items:center;gap:8px;color:var(--text);font-size:15px;margin-top:14px;cursor:pointer}
   .check input{width:20px;height:20px;margin:0;accent-color:var(--accent)}
   select{width:100%;padding:11px 12px;border:1px solid rgba(128,128,128,.3);border-radius:10px;background:var(--bg2);color:var(--text);font-size:16px}
@@ -86,27 +87,24 @@
       </svg>
       <div class="brand">Lepestok.warsaw</div>
     </div>
-    <div class="card">
+    <div class="card" id="loginCard">
+      <p id="authHint" class="hint hidden"></p>
       <label>Логин</label><input id="login" autocomplete="username" autocapitalize="off">
       <label>Пароль</label><input id="pass" type="password" autocomplete="current-password">
-      <label class="check"><input type="checkbox" id="remember" checked> Запомнить меня</label>
+      <div id="setupWrap" class="hidden">
+        <label>Повтори пароль</label><input id="pass2" type="password">
+        <label>Пароль администратора (снимает блокировку)</label><input id="adminNew" type="password">
+      </div>
+      <label class="check" id="rememberWrap"><input type="checkbox" id="remember" checked> Запомнить меня</label>
       <div class="err" id="authErr"></div>
       <button id="authBtn">Войти</button>
     </div>
-    <button class="ghost" onclick="openAdmin()">🔒 Журнал входов</button>
-  </div>
-
-  <!-- АДМИН: журнал входов -->
-  <div id="admin" class="hidden">
-    <h1>🔒 Журнал входов</h1>
-    <div class="card" id="adminLogin">
+    <div class="card hidden" id="lockCard">
+      <p class="hint">⛔ 3 неверных пароля — вход заблокирован. Введи пароль администратора, чтобы снять блокировку.</p>
       <label>Пароль администратора</label><input id="adminPass" type="password">
-      <div class="err" id="adminErr"></div>
-      <button id="adminBtn">Показать</button>
+      <div class="err" id="lockErr"></div>
+      <button id="unlockBtn">Снять блокировку</button>
     </div>
-    <div id="lockList"></div>
-    <div id="logList"></div>
-    <button class="ghost" onclick="closeAdmin()">← Назад</button>
   </div>
 
   <!-- ПРИЛОЖЕНИЕ -->
@@ -161,7 +159,6 @@
     <div id="list"></div>
     </div>
 
-    <button class="ghost" onclick="openAdmin()">🔒 Журнал входов</button>
     <button class="ghost" id="logoutBtn">Выйти</button>
   </div>
 </div>
@@ -196,95 +193,80 @@ const num = v => parseFloat(String(v).replace(',', '.')) || 0;
 const zl = n => (Math.round(n * 100) / 100).toLocaleString('ru-RU', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' zł';
 
 // ---------- вход ----------
-// URL веб-приложения Google Apps Script (см. login_log.gs). Логин и пароли проверяются там —
-// в этом (публичном) коде их нет.
-const API_URL = '';
+// Без сервера и без журнала. Логин/пароль задаются при первом запуске и хранятся
+// только хешем в облаке Telegram этого аккаунта — в публичном коде их нет.
+// 3 неверных пароля → блокировка, снимается паролем администратора.
+const MAX_FAILS = 3;
+let auth = null; // {login, hash, admin, salt}
+let fails = 0, locked = false;
 
-async function api(data) {
-  if (!API_URL) return {error: 'Сервер не подключён (API_URL пустой)'};
-  const u = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user) || {};
-  const body = JSON.stringify(Object.assign({
-    tgId: u.id || '', tgUser: u.username || '', tgName: [u.first_name, u.last_name].filter(Boolean).join(' ')
-  }, data));
-  try {
-    const r = await fetch(API_URL, {method: 'POST', headers: {'Content-Type': 'text/plain'}, body});
-    return await r.json();
-  } catch (e) { return {error: 'Нет связи с сервером'}; }
+async function sha(s) {
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
 }
+const hashPass = (login, pass) => sha(auth.salt + '|' + login + '|' + pass);
 
-// «Запомнить меня»: сервер выдаёт подписанный токен, он хранится в облаке Telegram
 async function initAuth() {
-  const [saved] = await Promise.all([store.get(['remember']), new Promise(r => setTimeout(r, 1300))]);
-  if (sessionStorage.getItem('ok') === '1') { $('splash').classList.add('gone'); return showApp(); }
-  if (saved.remember) {
-    const res = await api({action: 'check', token: saved.remember});
-    if (res.ok) { sessionStorage.setItem('ok', '1'); $('splash').classList.add('gone'); return showApp(); }
-    if (res.error === 'expired') await store.del('remember');
-  }
+  const [v] = await Promise.all([store.get(['auth', 'fails', 'locked', 'remember']), new Promise(r => setTimeout(r, 1300))]);
+  auth = v.auth ? JSON.parse(v.auth) : null;
+  fails = Number(v.fails || 0); locked = v.locked === '1';
   $('splash').classList.add('gone');
+  if (auth && !locked && (sessionStorage.getItem('ok') === '1' || v.remember === auth.hash)) {
+    sessionStorage.setItem('ok', '1'); return showApp();
+  }
   $('auth').classList.remove('hidden');
+  if (!auth) {
+    $('authHint').textContent = 'Первый запуск: придумай логин, пароль и пароль администратора.';
+    $('authHint').classList.remove('hidden'); $('setupWrap').classList.remove('hidden');
+    $('authBtn').textContent = 'Сохранить и войти';
+  }
+  showLock();
 }
-
-// ---------- админ: журнал входов (пароль проверяет Apps Script) ----------
-let adminFrom = null;
-function openAdmin() {
-  adminFrom = $('app').classList.contains('hidden') ? 'auth' : 'app';
-  $(adminFrom).classList.add('hidden'); $('admin').classList.remove('hidden');
-  $('adminErr').textContent = ''; window.scrollTo(0, 0);
-}
-function closeAdmin() {
-  $('admin').classList.add('hidden'); $(adminFrom).classList.remove('hidden');
-  $('adminPass').value = ''; $('logList').innerHTML = ''; $('lockList').innerHTML = ''; $('adminLogin').classList.remove('hidden');
-}
-$('adminBtn').onclick = async () => {
-  $('adminErr').textContent = '';
-  $('adminBtn').disabled = true; $('adminBtn').textContent = 'Загружаю…';
-  const res = await api({action: 'list', pass: $('adminPass').value});
-  $('adminBtn').disabled = false; $('adminBtn').textContent = 'Показать';
-  if (res.error) return $('adminErr').textContent = res.error;
-  $('adminLogin').classList.add('hidden');
-  renderLocks(res.locks || []); renderLog(res.rows || []);
-};
-async function unlockUser(target) {
-  const res = await api({action: 'unlock', pass: $('adminPass').value, target});
-  if (res.error) return alert(res.error);
-  renderLocks(res.locks || []); renderLog(res.rows || []);
-}
-function renderLocks(locks) {
-  if (!locks.length) return $('lockList').innerHTML = '<div class="card meta">🔓 Блокировок нет</div>';
-  $('lockList').innerHTML = '<h2>Заблокированы</h2>' + locks.map(l => `<div class="card item">
-    <div><div class="name">⛔ ${l.id === 'ALL' ? 'Вход для всех (10+ ошибок)' : l.id === 'web' ? 'Браузер (без Telegram)' : 'TG id ' + esc(l.id)}</div>
-      <div class="meta">с ${esc(l.since)}</div></div>
-    <button class="small" onclick="unlockUser('${esc(l.id)}')">Снять</button>
-  </div>`).join('') + (locks.length > 1 ? '<button class="small" onclick="unlockUser(\'*\')">Снять все</button>' : '');
-}
-function renderLog(rows) {
-  const e = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  if (!rows.length) return $('logList').innerHTML = '<div class="card empty">Входов пока не было</div>';
-  // колонки: Время, Успех, TG ник, Имя, TG id, Комментарий
-  $('logList').innerHTML = rows.map(r => `<div class="card">
-    <div class="name">${r[1] === 'да' ? '✅' : '⚠️'} ${r[2] ? '@' + e(r[2]) : e(r[3] || 'без ника')}</div>
-    <div class="meta">${e(r[0])}${r[3] && r[2] ? ' · ' + e(r[3]) : ''}${r[5] ? ' · ' + e(r[5]) : ''}</div>
-  </div>`).join('');
+function showLock() {
+  $('loginCard').classList.toggle('hidden', locked); $('lockCard').classList.toggle('hidden', !locked);
 }
 
 $('authBtn').onclick = async () => {
   const l = $('login').value.trim(), p = $('pass').value;
   $('authErr').textContent = '';
   if (!l || !p) return $('authErr').textContent = 'Введи логин и пароль';
-  $('authBtn').disabled = true; $('authBtn').textContent = 'Проверяю…';
-  // сервер проверяет пароль и пишет попытку в журнал
-  const res = await api({action: 'login', login: l, pass: p});
-  $('authBtn').disabled = false; $('authBtn').textContent = 'Войти';
 
-  if (!res.ok) {
+  if (!auth) { // первый запуск — создаём учётку
+    const a = $('adminNew').value;
+    if (p.length < 6) return $('authErr').textContent = 'Пароль минимум 6 символов';
+    if (p !== $('pass2').value) return $('authErr').textContent = 'Пароли не совпадают';
+    if (a.length < 4 || a === p) return $('authErr').textContent = 'Пароль администратора: минимум 4 символа и не такой, как основной';
+    auth = {login: l, salt: crypto.getRandomValues(new Uint32Array(4)).join('-')};
+    auth.hash = await hashPass(l, p);
+    auth.admin = await sha(auth.salt + '|admin|' + a);
+    await store.set('auth', JSON.stringify(auth));
+  } else if (l !== auth.login || (await hashPass(l, p)) !== auth.hash) {
+    fails++;
     if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
-    return $('authErr').textContent = res.error || 'Ошибка входа';
+    if (fails >= MAX_FAILS) {
+      locked = true;
+      await Promise.all([store.set('locked', '1'), store.set('fails', String(fails))]);
+      return showLock();
+    }
+    await store.set('fails', String(fails));
+    return $('authErr').textContent = 'Неверный логин или пароль. Осталось попыток: ' + (MAX_FAILS - fails);
   }
+  fails = 0; await store.del('fails');
   sessionStorage.setItem('ok', '1');
-  if ($('remember').checked) await store.set('remember', res.token);
+  if ($('remember').checked) await store.set('remember', auth.hash);
   showApp();
 };
+
+$('unlockBtn').onclick = async () => {
+  $('lockErr').textContent = '';
+  if ((await sha(auth.salt + '|admin|' + $('adminPass').value)) !== auth.admin)
+    return $('lockErr').textContent = 'Неверный пароль администратора';
+  locked = false; fails = 0;
+  await Promise.all([store.del('locked'), store.del('fails')]);
+  $('adminPass').value = ''; $('pass').value = '';
+  showLock();
+};
+
 $('logoutBtn').onclick = async () => { sessionStorage.removeItem('ok'); await store.del('remember'); location.reload(); };
 
 // ---------- данные: закупки (p_) и лиды (l_) ----------
